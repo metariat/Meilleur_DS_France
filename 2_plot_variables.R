@@ -10,17 +10,16 @@ missing.values %>%
   geom_bar(stat = "identity", fill = "red") +
   coord_flip() + theme_bw()
 
-
+rm(missing.values)
 
 ###### Numeric variables
 #################################
 
 #------get the var type
-
 var.type_ = sapply(data, function(x) class(x) %in% c("integer","numeric") && length(unique(x)) > 2)
 num.var_ = names(var.type_[var.type_ == TRUE])
 cat.var_ = names(var.type_[var.type_ == FALSE])
-#check: 
+#check if some variables are not classified: 
 length(var.type_) - length(num.var_) - length(cat.var_)
 rm(var.type_)
 
@@ -41,10 +40,10 @@ for(i in num.var_){
 high.cardinality = data.frame("variable" = as.character(), 
                               "number.modalities" = as.numeric())
 
-high.cardi.thres = 20
+high.cardi.thres = 20 #to be changed
 for(i in cat.var_){
   if(length(unique(data[, get(i)])) <= high.cardi.thres){
-    #p_ = emblem.plot(data[train.index == 1], i, response.var)
+    # p_ = emblem.plot(data[train.index == 1], i, response.var)
     # tmpFile <- paste0(path_plot, "cat_histogram of ", i, ".png")
     # export(p_, file = tmpFile)
   } else {
@@ -53,5 +52,5 @@ for(i in cat.var_){
                                         "number.modalities" = length(unique(data[, get(i)]))))
     }
 }
-
+#output: high.cardinality data frame containing list of high cardinality variables
 
