@@ -1,24 +1,43 @@
-training_ = training[prix < 50, ]
+y.train = training$prix
+x.train = subset(training, select= -c(prix))
 
-train_pool = catboost.load_pool(data = subset(training_, select = -c(prix)),
-                                label = training_[, prix])
-test_pool = catboost.load_pool(data = subset(testing, select = -c(prix)),
-                               label = testing[, prix])
-
-
-fit_params <- list(iterations = 5000,
-                   thread_count = 10,
-                   loss_function = 'MAPE',
-                   border_count = 64,
-                   depth = 10,
-                   learning_rate = 0.2,
-                   l2_leaf_reg = 3.5,
-                   train_dir = 'train_dir')
-model <- catboost.train(train_pool, NULL, fit_params)
+y.test = testing$prix
+x.test = subset(testing, select= -c(prix))
 
 
-prediction <- catboost.predict(model, 
-                               test_pool, 
-                               prediction_type = 'RawFormulaVal')
 
-mape_error(testing$prix, prediction)
+# Enable caret to use MAE as eval metric
+mapeSummary <- function (train,
+                        lev = NULL,
+                        model = NULL) {
+  out <- mape_error(train$obs, train$pred)  
+  names(out) <- "mape"
+  out
+}
+
+control <- trainControl(method = "cv",
+                        number = 2,
+                        verboseIter = FALSE,
+                        summaryFunction = mapeSummary)
+
+grid <- expand.grid(depth = c(10),
+                    learning_rate = c(0.2),
+                    iterations = c(5000),
+                    l2_leaf_reg = c(3.5),
+                    rsm = c(0.6),
+                    border_count = c(64))
+
+cb <- train(y          = log(y.train),
+            x          = data.frame(x.train), 
+            preProcess = NULL,
+            method     = catboost.caret, 
+            metric     = "mape", 
+            maximize   = FALSE, 
+            tuneGrid   = grid, 
+            trControl  = control)
+
+#model information
+print(cb)
+
+cat.pred <- exp(predict(cb, data.frame(x.test)))
+mape_error(y.test, cat.pred)
