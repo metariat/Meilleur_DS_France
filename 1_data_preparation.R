@@ -13,6 +13,8 @@ library(randomForest)
 library(xgboost)
 library(catboost)
 library(Hmisc) #regrouping levels
+library(tm)
+library(doParallel)
 
 
 path_plot = "C:/Users/xq.do/Downloads/CLE_USB/CLE_USB/plot/"
@@ -44,6 +46,7 @@ test = test[, col, with = F]
 ########     Mix them altogether 
 ########################################
 data = rbind(train, test)
+data[, key := seq(1, nrow(data))]
 rm(train); rm(test)
 gc()
 
@@ -55,7 +58,6 @@ names(data) <- gsub("_", ".", names(data))
 
 ###### Apply some corrections
 #######################################
-
 
 ####### Convert date variables if necessary
 # lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")
@@ -72,7 +74,7 @@ data[, tx.rembours := as.numeric(gsub("%", "", tx.rembours, fixed = T))]
 #######################################
 
 #------get the var type
-var.type_ = sapply(data, function(x) class(x) %in% c("integer","numeric") && length(unique(x)) > 2)
+var.type_ = sapply(data, function(x) class(x) %in% c("integer","numeric"))
 num.var_ = names(var.type_[var.type_ == TRUE])
 cat.var_ = names(var.type_[var.type_ == FALSE])
 #check if some variables are not classified: 
@@ -81,7 +83,12 @@ rm(var.type_)
 
 
 
-str(data, len = ncol(data))
+###### Lower case character variables
+for (i_ in cat.var_){
+  data[, (i_) := tolower(get(i_)) %>% as.factor()]
+}
+rm(i_)
+###### Convert numeric variable to character
 cat.var = c("") #to be changed
 
 
@@ -92,3 +99,5 @@ for (i in cat.var_){
     data[, (i) := as.numeric(get(i))]
   }
 }
+
+rm(cat.var); rm(cat.var_); rm(i); rm(num.var_); rm(col)

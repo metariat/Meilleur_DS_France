@@ -6,6 +6,18 @@ data[is.na(data)] = -999
 
 
 ###############################################################
+###                Feature Engineering                     ####
+###############################################################
+source("C:/Best_Data_Scientist/00_word_frequency_function.R")
+worf = WordFrequency(data$libelle)
+worf[1:10, ]
+data[, libelle.thermo := as.numeric(grepl("thermoformée", libelle))]
+data[, libelle.aluminium := as.numeric(grepl("aluminium", libelle))]
+data[, libelle.pvc := as.numeric(grepl("pvc", libelle))]
+data[, libelle.pvdc := as.numeric(grepl("pvdc", libelle))]
+rm(worf)
+
+###############################################################
 ###         Deconcatenate the concatenated variables       ####
 ###############################################################
 
@@ -124,5 +136,7 @@ for (i in list.deconca.2_){
 #To be developped  #To be developped  #To be developped  #To be developped  
 
 
-
+rm(conca.var.1_); rm(conca.var.1.sim_); rm(conca.var.2_); rm(conca.var.2.sim_);
+rm(i); rm(j_); rm(levels); rm(list.deconca.1_); rm(list.deconca.2_);
+rm(simplify.thres); rm(var_); rm(high.cardinality); gc()
 

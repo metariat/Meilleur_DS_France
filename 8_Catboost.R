@@ -1,43 +1,22 @@
-y.train = training$prix
-x.train = subset(training, select= -c(prix))
-
-y.test = testing$prix
-x.test = subset(testing, select= -c(prix))
-
+train_pool = catboost.load_pool(data = subset(training, select = -c(prix)),
+                                label = training[, prix])
+test_pool = catboost.load_pool(data = subset(testing, select = -c(prix)),
+                               label = testing[, prix])
 
 
-# Enable caret to use MAE as eval metric
-mapeSummary <- function (train,
-                        lev = NULL,
-                        model = NULL) {
-  out <- mape_error(train$obs, train$pred)  
-  names(out) <- "mape"
-  out
-}
+fit_params <- list(iterations = 2000,
+                   thread_count = 15,
+                   loss_function = 'MAPE',
+                   border_count = 64,
+                   depth = 10,
+                   learning_rate = 0.5,
+                   l2_leaf_reg = 3.5,
+                   train_dir = 'train_dir')
+model <- catboost.train(train_pool, NULL, fit_params)
 
-control <- trainControl(method = "cv",
-                        number = 2,
-                        verboseIter = FALSE,
-                        summaryFunction = mapeSummary)
 
-grid <- expand.grid(depth = c(10),
-                    learning_rate = c(0.2),
-                    iterations = c(5000),
-                    l2_leaf_reg = c(3.5),
-                    rsm = c(0.6),
-                    border_count = c(64))
+prediction <- catboost.predict(model, 
+                               test_pool, 
+                               prediction_type = 'RawFormulaVal')
 
-cb <- train(y          = log(y.train),
-            x          = data.frame(x.train), 
-            preProcess = NULL,
-            method     = catboost.caret, 
-            metric     = "mape", 
-            maximize   = FALSE, 
-            tuneGrid   = grid, 
-            trControl  = control)
-
-#model information
-print(cb)
-
-cat.pred <- exp(predict(cb, data.frame(x.test)))
-mape_error(y.test, cat.pred)
+mape_error(testing$prix, prediction)

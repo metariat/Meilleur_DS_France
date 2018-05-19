@@ -54,3 +54,4 @@ for(i in cat.var_){
 }
 #output: high.cardinality data frame containing list of high cardinality variables
 
+rm(cat.var_); rm(i); rm(high.cardi.thres); rm(num.var_)
