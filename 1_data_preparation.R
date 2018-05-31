@@ -15,12 +15,17 @@ library(catboost)
 library(Hmisc) #regrouping levels
 library(tm)
 library(doParallel)
-
+library(stringr)
+library(text2vec)
+library(quantreg)
+library(ranger)
 
 path_plot = "C:/Users/xq.do/Downloads/CLE_USB/CLE_USB/plot/"
 
 setwd("C:/Users/xq.do/Downloads/CLE_USB/CLE_USB/data_challenge")
 source("C:/Best_Data_Scientist/function_emblem_plot.R")
+source("C:/Best_Data_Scientist/function_string_clean.R")
+source("C:/Best_Data_Scientist/function_text_mining.R")
 
 ###############################################################
 ###              Read the data                             ####
@@ -32,7 +37,9 @@ response.var = "prix"
 
 train[, train.index := 1]
 test[, train.index := 0]
-test[, prix := -1]
+test[, (response.var) := -1]
+setnames(test, "id", "identifiant")
+train[, identifiant := -1]
 
 #plot the response variable
 hist(train$prix, breaks = 300)
@@ -67,6 +74,7 @@ names(data) <- gsub("_", ".", names(data))
 
 ##### Replace some unwanted character
 data[, tx.rembours := as.numeric(gsub("%", "", tx.rembours, fixed = T))]
+data[, libelle := gsub("(s)", "", libelle, fixed = T)]
 #to be changed
 
 
@@ -83,11 +91,16 @@ rm(var.type_)
 
 
 
-###### Lower case character variables
-for (i_ in cat.var_){
-  data[, (i_) := tolower(get(i_)) %>% as.factor()]
-}
-rm(i_)
+###### Clean
+data[, libelle := StringClean(libelle, digit.del = 0, keep.only.char = 0,
+                              stop.lan = "french",
+                              custom.stop.words = NULL) %>% 
+                  as.factor()]
+data[, substances := StringClean(substances, digit.del = 0, keep.only.char = 0,
+                              stop.lan = "french",
+                              custom.stop.words = NULL) %>% 
+                     as.factor()]
+
 ###### Convert numeric variable to character
 cat.var = c("") #to be changed
 

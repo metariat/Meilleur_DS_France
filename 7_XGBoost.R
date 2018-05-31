@@ -4,9 +4,9 @@
 
 thres = c()
 
-for (thres_ in exp(seq(log(10), log(800), len = 10))){ #to be changed
-  train.cv_ = train[cv.id != 3, ]
-  test.cv_ = train[cv.id == 3, ]
+for (thres_ in exp(seq(log(16), log(800), len = 5))){ #to be changed
+  train.cv_ = train[cv.id != 1, ]
+  test.cv_ = train[cv.id == 1, ]
   thres_ = round(thres_, 0)
   #application of the threshold
   train.cv_ = train.cv_[abs(get(response.var)) < thres_]
@@ -20,16 +20,16 @@ for (thres_ in exp(seq(log(10), log(800), len = 10))){ #to be changed
   x.test_ = subset(test.cv_, select= -c(get(response.var), key))
   x.test_ = as.matrix(x.test_)
   
-  dtrain_ = xgb.DMatrix(as.matrix(x.train_), label = y.train_)
+  dtrain_ = xgb.DMatrix(as.matrix(x.train_), label = log(y.train_))
   dtest_ = xgb.DMatrix(as.matrix(x.test_), label = y.test_)
   
   param <- list(objective           = "reg:linear",
                 eval_metric         = "mae")
   
-  model_ = xgb.train(param, data = dtrain_, nrounds = 1000)
+  model_ = xgb.train(param, data = dtrain_, nrounds = 500, nthread = 16)
   
   #testing mae
-  xgb.pred_ = predict(model_, new = dtest_)
+  xgb.pred_ = exp(predict(model_, new = x.test_))
   error_ = round(mape_error(y.test_, xgb.pred_), 2)
   print(paste0('threshold: ', thres_, ', error: ', error_))
   rm(train.cv_); rm(test.cv_); rm(thres_); rm(error_);
@@ -38,12 +38,60 @@ for (thres_ in exp(seq(log(10), log(800), len = 10))){ #to be changed
 }
   
 ##########################################################
-#####               Model training             ###########
+#####         Model training & tuning          ###########
 ##########################################################
-best.thres = 20
+best.thres = 100
 
+
+train.temp_ = train[abs(get(response.var)) < best.thres]
+
+y.train_ = train.temp_[, get(response.var)]
+x.train_ = subset(train.temp_, select= -c(get(response.var), key, cv.id))
+x.train_ = as.matrix(x.train_)
+
+x.test_ = subset(prediction, select= -c(get(response.var), key))
+x.test_ = as.matrix(x.test_)
+
+dtrain_ = xgb.DMatrix(data = x.train_, label = log(y.train_))
+dtest_ = xgb.DMatrix(data = x.test_, label = rep(1, dim(x.test_)[1]))
+
+param <- list(objective    = "reg:linear",
+              eval_metric  = "rmse",
+              #max_depth    = 10,
+              #min_child_weight = 10,
+              #etat         = 0.1,
+              nthread      = 16)
+
+mod = xgb.cv(dtrain_, 
+             params                = param,
+             nfold                 = 2,
+             nrounds               = 3000,
+             print_every_n         = 5,
+             early_stopping_rounds = 50)
+plot(mod$evaluation_log$train_rmse_mean, type = "l")
+lines(mod$evaluation_log$test_rmse_mean, type = "l", col = "red")
+
+best.round_ = mod$best_iteration
+
+mod = xgb.train(dtrain_, 
+                params  = param, 
+                nrounds = best.round_, 
+                verbose = F)
+
+test.pred_ = exp(predict(mod, dtest_))
+
+submission = data.table("id" = prediction$identifiant,
+                        "prix" = test.pred_)
+
+fwrite(submission, "C:/Best_Data_Scientist/submission/submission_xgb.csv", sep = ";")
+
+
+
+##########################################################
+#####                  Stacking                ###########
+##########################################################
 stack.cv = data.table()
-for (i in 1:5){
+for (i in 1:K){
   train.cv_ = train[!cv.id == i, ]
   train.cv_ = train.cv_[abs(get(response.var)) < best.thres]
   test.cv_ = train[cv.id == i, ]
@@ -60,13 +108,9 @@ for (i in 1:5){
   dtrain_ = xgb.DMatrix(data = x.train_, label = log(y.train_))
   dtest_ = xgb.DMatrix(data = x.test_, label = log(y.test_))
   
-  param <- list(objective           = "reg:linear",
-                eval_metric         = "mae")
-  
-  mod = xgb.train(dtrain_, params = param, 
-                  max_depth = 15, 
-                  eta = 0.1,
-                  nrounds = 1000, 
+  mod = xgb.train(dtrain_, 
+                  params  = param, 
+                  nrounds = best.round_, 
                   verbose = F)
   
   train.pred_ = exp(predict(mod, dtrain_))
@@ -83,3 +127,7 @@ for (i in 1:5){
 
 fwrite(stack.cv, "C:/Best_Data_Scientist/stacking/xgboost_prediction.csv")
 
+rm(mod); rm(param); rm(stack.cv); rm(stack.cv_); rm(submission); rm(test.cv_);
+rm(train.cv_); rm(train.temp_); rm(x.test_); rm(x.train_); rm(best.round_);
+rm(best.thres); rm(dtrain_); rm(dtest_); rm(i); rm(train.pred_); rm(test.pred_);
+rm(y.test_); rm(y.train_); gc()

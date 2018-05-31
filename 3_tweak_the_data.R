@@ -17,6 +17,16 @@ data[, libelle.pvc := as.numeric(grepl("pvc", libelle))]
 data[, libelle.pvdc := as.numeric(grepl("pvdc", libelle))]
 rm(worf)
 
+
+############## Text mining ###################################
+test = TextFeatureGeneraator(df = data, feature = "substances", id = "key", 
+                             lan = "french", pruning.level = 100)
+data = cbind(data, test)
+
+test = TextFeatureGeneraator(df = data, feature = "libelle", id = "key", 
+                             lan = "french", pruning.level = 100)
+data = cbind(data, test)
+
 ###############################################################
 ###         Deconcatenate the concatenated variables       ####
 ###############################################################
@@ -47,8 +57,8 @@ levels = as.vector(unique(data[, get(conca.var.2_)])) %>%
   unlist() %>%
   unique()
 
-levels = lapply(levels, 
-                function(x) 
+levels = lapply(levels,
+                function(x)
                   gsub("[\\(\\)]", "", regmatches(x, gregexpr("\\(.*?\\)", x))[[1]]))
 levels = unlist(levels) %>% make.names() %>% unique()
 list.deconca.2_ = c()
@@ -58,33 +68,38 @@ for (j_ in levels){
   data[, (var_) := as.numeric(grepl(j_, get(conca.var.2_)))]
 }
 
+#### 3. substances
+#############################
+conca.var.3_ = "substances"
+levels = as.vector(unique(data[, get(conca.var.3_)])) %>%
+  strsplit(., ",") %>%
+  unlist() %>%
+  unique()
 
+list.deconca.3_ = c()
 
-###############################################################
-###                Regroup rare modalities                 ####
-###############################################################
+library(doParallel)
+library(foreach)
+data.temp = data.table("test.col" = rep(1, nrow(data)))
 
-p = 0.01 #to be changed
-#all the level with exposure inferior to p will be grouped together
-
-#----------- The systematic way
-#######################################
-
-#self coding
-# for(i in high.cardinality$variable){
-#   t_ <- table(data[, get(i)])
-#   y_ <- subset(t_, prop.table(t_) < p)
-#   z_ <- subset(t_, prop.table(t_) >= p)
-#   other_ <- rep("other", sum(y_))
-#   new.table_ <- c(z_, table(other_))
-#   data[, (i) := as.factor(rep(names(new.table_), new.table_))]
-# }
-
-#using pre-written function
-for(i in high.cardinality$variable){
-  data[, (i) := combine.levels(get(i), minlev = p)]
+cores=detectCores()
+cl <- makeCluster(cores[1]) #not to overload your computer
+registerDoParallel(cl)
+data.temp <- foreach(i=1:length(levels), .combine = cbind, .packages='data.table') %dopar% {
+  var.temp_ = levels[i]
+  temp = data.table("g" = as.numeric(grepl(var.temp_, data[, get(conca.var.3_)]))) #calling a function
+  setnames(temp, "g", var.temp_)
+  temp #Equivalent to finalMatrix = cbind(finalMatrix, tempMatrix)
 }
-rm(p)
+stopCluster(cl)
+data = cbind(data, data.temp)
+data = subset(data, select = which(!duplicated(names(data)))) 
+
+# for (j_ in levels){
+#   var_ = paste0(conca.var.3_, '.', j_)
+#   list.deconca.3_ = c(list.deconca.3_, var_)
+#   data[, (var_) := as.numeric(grepl(j_, get(conca.var.3_)))]
+# }
 
 
 
@@ -93,9 +108,9 @@ rm(p)
 ###############################################################
 data[, (conca.var.1_) := rowSums(.SD), .SDcols = list.deconca.1_]
 data[, (conca.var.2_) := rowSums(.SD), .SDcols = list.deconca.2_]
+data[, (conca.var.3_) := rowSums(.SD), .SDcols = list.deconca.3_]
 
-
-simplify.thres = 0.03
+simplify.thres = 0.01
 
 # first var
 conca.var.1.sim_ = paste0(conca.var.1_, '.quang.other')
@@ -114,6 +129,17 @@ data[, (conca.var.2.sim_) := 0]
 for (i in list.deconca.2_){
   if (sum(data[, get(i)]) <= nrow(data) * simplify.thres){
     data[, (conca.var.2.sim_) := pmax(get(conca.var.2.sim_),
+                                      get(i))]
+    data[, (i) := NULL]
+  }
+}
+
+# third var
+conca.var.3.sim_ = paste0(conca.var.3_, '.quang.other')
+data[, (conca.var.3.sim_) := 0]
+for (i in list.deconca.3_){
+  if (sum(data[, get(i)]) <= nrow(data) * simplify.thres){
+    data[, (conca.var.3.sim_) := pmax(get(conca.var.3.sim_),
                                       get(i))]
     data[, (i) := NULL]
   }
@@ -138,5 +164,5 @@ for (i in list.deconca.2_){
 
 rm(conca.var.1_); rm(conca.var.1.sim_); rm(conca.var.2_); rm(conca.var.2.sim_);
 rm(i); rm(j_); rm(levels); rm(list.deconca.1_); rm(list.deconca.2_);
-rm(simplify.thres); rm(var_); rm(high.cardinality); gc()
+rm(simplify.thres); rm(var_); gc()
 
